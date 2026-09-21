@@ -1,75 +1,53 @@
-import logging
-import multiprocessing
+import sys
 
 from pymobiledevice3.lockdown import create_using_usbmux, LockdownClient
-
-from pymobiledevice3.cli.remote import install_driver_if_required
-from pymobiledevice3.cli.remote import select_device, RemoteServiceDiscoveryService
-from pymobiledevice3.cli.remote import start_tunnel
-from pymobiledevice3.cli.remote import verify_tunnel_imports
-from pymobiledevice3.remote.common import TunnelProtocol
-from pymobiledevice3.remote.core_device_tunnel_service import SSLPSKContext
-
 from pymobiledevice3.services.amfi import AmfiService
-
 from pymobiledevice3.exceptions import NoDeviceConnectedError
 
-def get_usbmux_lockdownclient():
+
+def _wait_for_enter(prompt: str) -> None:
+    """Prompt and wait, but do not blow up when there is no console.
+
+    Without a tty (piped output, launchd, CI) input() raises EOFError, which
+    used to surface as a traceback rather than as the actual problem.
+    """
+    print(prompt)
+    try:
+        input()
+    except EOFError:
+        print("没有可用的终端输入，请在交互式终端中运行本程序。")
+        sys.exit(1)
+
+
+async def get_usbmux_lockdownclient() -> LockdownClient:
     while True:
         try:
-            lockdown = create_using_usbmux()
+            await create_using_usbmux()
         except NoDeviceConnectedError:
-            print("请连接设备后按回车...")
-            input()
+            _wait_for_enter("请连接设备后按回车...")
         else:
             break
     while True:
-        lockdown = create_using_usbmux()
+        lockdown = await create_using_usbmux()
         if lockdown.all_values.get("PasswordProtected"):
-            print("请解锁设备后按回车...")
-            input()
+            _wait_for_enter("请解锁设备后按回车...")
         else:
             break
-    return create_using_usbmux()
-
-def get_version(lockdown: LockdownClient):
-    return lockdown.all_values.get("ProductVersion")
-
-def get_developer_mode_status(lockdown: LockdownClient):
-    return lockdown.developer_mode_status
-
-def reveal_developer_mode(lockdown: LockdownClient):
-    AmfiService(lockdown).create_amfi_show_override_path_file()
-
-def enable_developer_mode(lockdown: LockdownClient):
-    AmfiService(lockdown).enable_developer_mode()
-
-def get_serverrsd():
-    install_driver_if_required()
-    if not verify_tunnel_imports():
-        exit(1)
-    return select_device(None)
+    return await create_using_usbmux()
 
 
-async def tunnel(rsd: RemoteServiceDiscoveryService, queue: multiprocessing.Queue):
-    protocols = [TunnelProtocol.QUIC]
-    if SSLPSKContext is not None:
-        protocols.append(TunnelProtocol.TCP)
-    else:
-        logging.warning('未检测到 sslpsk_pmd3，无法使用 TCP 隧道回退。')
-    last_error = None
+def get_version(lockdown: LockdownClient) -> str:
+    return lockdown.product_version
 
-    for protocol in protocols:
-        try:
-            async with start_tunnel(rsd, None, protocol=protocol) as tunnel_result:
-                if protocol is TunnelProtocol.TCP:
-                    logging.warning('QUIC 隧道建立失败，已自动回退到 TCP 模式。')
-                queue.put((tunnel_result.address, tunnel_result.port))
-                await tunnel_result.client.wait_closed()
-                return
-        except ConnectionError as exc:
-            logging.warning('使用 %s 隧道协议时连接失败：%s', protocol.value, exc)
-            last_error = exc
 
-    if last_error:
-        raise last_error
+async def get_developer_mode_status(lockdown: LockdownClient) -> bool:
+    return await lockdown.get_developer_mode_status()
+
+
+async def reveal_developer_mode(lockdown: LockdownClient) -> None:
+    await AmfiService(lockdown).reveal_developer_mode_option_in_ui()
+
+
+def uses_native_tunnel() -> bool:
+    """macOS can borrow Apple's own tunnel instead of building one."""
+    return sys.platform == "darwin"

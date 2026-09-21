@@ -1,4 +1,9 @@
-pymobiledevice3==2.46.1
-PyYAML==6.0.1
-geopy==2.4.1
-qh3<1.0
+# pymobiledevice3 11.x is required for iOS 18+.
+#
+# The 2.46.x line only knows the "classic" QUIC/TCP tunnel, and iOS 18 refuses
+# its TLS handshake outright (CONNECTION_CLOSE, frame_type=6, reason='TLS
+# error'). 11.x uses Apple's own native tunnel via remotepairingd on macOS,
+# which iOS 18 accepts -- and which needs no root at all.
+pymobiledevice3>=11.15,<12
+PyYAML>=6.0
+geopy>=2.4

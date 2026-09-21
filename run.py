@@ -4,6 +4,7 @@ automatically run the route
 """
 
 """修正坐标误差，百度取点使用 BD-09 坐标系，iOS使用 WGS-09 坐标系，进行转换"""
+import asyncio
 import math
 import time
 import random
@@ -134,22 +135,31 @@ def fixLockT(loc: list, v, dt):
             t += dt
     return fixedLoc
 
-def run1(dvt, loc: list, v, dt=0.2):
+async def run1(sim, loc: list, v, dt=0.2):
     fixedLoc = fixLockT(loc, v, dt)
     nList = (5, 6, 7, 8, 9)
     n = nList[random.randint(0, len(nList)-1)]
     fixedLoc = randLoc(fixedLoc, n=n)  # a path will be divided into n parts for random route
-    clock = time.time()
+    # Pace against a monotonic deadline and sleep between fixes. A busy-wait
+    # would hold a CPU core at 100% for the whole run, which on a laptop means
+    # fans and battery drain; monotonic time also keeps the pace correct if the
+    # system clock is stepped mid-run.
+    deadline = time.monotonic()
     for i in fixedLoc:
-        # utils.setLoc(bd09Towgs84(i))
-        location.set_location(dvt, **bd09Towgs84(i))
-        while time.time()-clock < dt:
-            pass
-        clock = time.time()
+        await location.set_location(sim, **bd09Towgs84(i))
+        deadline += dt
+        remaining = deadline - time.monotonic()
+        if remaining > 0:
+            await asyncio.sleep(remaining)
+        else:
+            # Setting the location took longer than dt; resync so the lag does
+            # not accumulate into a permanently drifting deadline.
+            deadline = time.monotonic()
 
-def run(dvt, loc: list, v, d=15):
+
+async def run(sim, loc: list, v, d=15):
     random.seed(time.time())
     while True:
         vRand = 1000/(1000/v-(2*random.random()-1)*d)
-        run1(dvt, loc, vRand)
+        await run1(sim, loc, vRand)
         print("跑完一圈了")

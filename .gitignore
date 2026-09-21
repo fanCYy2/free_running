@@ -3,3 +3,11 @@
 __pycache__/
 venv310/
 venv
+venv/
+.venv/
+
+# macOS
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
