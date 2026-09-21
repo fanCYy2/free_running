@@ -1,4 +1,4 @@
 pymobiledevice3==2.46.1
 PyYAML==6.0.1
 geopy==2.4.1
-qh3<1.0
+qh3<3.0
