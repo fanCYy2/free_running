@@ -135,19 +135,58 @@ def fixLockT(loc: list, v, dt):
             t += dt
     return fixedLoc
 
-async def run1(sim, loc: list, v, dt=0.2):
+def speedProfile(n, dt, variation=0.12, periods=(23.0, 57.0, 131.0)):
+    """Smooth per-step pace multipliers, averaging exactly 1.
+
+    A real runner drifts in and out of pace over tens of seconds -- they do not
+    hold one speed for a whole lap, nor jitter randomly from second to second.
+    So sum a few sine waves whose periods do not divide each other: the result
+    wanders continuously and never repeats within a lap.
+
+    The multipliers scale the interval between fixes, so a value above 1 means a
+    longer gap, i.e. running slower. Normalising by the mean keeps the lap time
+    (and therefore the average pace) exactly what the caller asked for.
+
+    :param n: number of fixes in the lap
+    :param dt: nominal seconds between fixes
+    :param variation: peak deviation from the nominal pace, 0.12 = +/-12%
+    :param periods: seconds per cycle for each component wave
+    """
+    if n <= 0:
+        return []
+    if variation <= 0:
+        return [1.0] * n
+
+    phases = [random.random() * 2 * math.pi for _ in periods]
+    factors = []
+    for i in range(n):
+        t = i * dt
+        wave = sum(math.sin(2 * math.pi * t / p + phase)
+                   for p, phase in zip(periods, phases))
+        factors.append(1.0 + variation * wave / len(periods))
+
+    mean = sum(factors) / len(factors)
+    return [f / mean for f in factors]
+
+
+async def run1(sim, loc: list, v, dt=0.2, variation=0.12):
     fixedLoc = fixLockT(loc, v, dt)
     nList = (5, 6, 7, 8, 9)
     n = nList[random.randint(0, len(nList)-1)]
     fixedLoc = randLoc(fixedLoc, n=n)  # a path will be divided into n parts for random route
+
+    # The points are already spaced v*dt apart, so stretching or compressing the
+    # gap between them changes the speed without touching the route itself.
+    factors = speedProfile(len(fixedLoc), dt, variation)
+
     # Pace against a monotonic deadline and sleep between fixes. A busy-wait
     # would hold a CPU core at 100% for the whole run, which on a laptop means
     # fans and battery drain; monotonic time also keeps the pace correct if the
     # system clock is stepped mid-run.
     deadline = time.monotonic()
-    for i in fixedLoc:
-        await location.set_location(sim, **bd09Towgs84(i))
-        deadline += dt
+    for i, point in enumerate(fixedLoc):
+        await location.set_location(sim, **bd09Towgs84(point))
+        deadline += dt * factors[i]
         remaining = deadline - time.monotonic()
         if remaining > 0:
             await asyncio.sleep(remaining)
@@ -157,9 +196,10 @@ async def run1(sim, loc: list, v, dt=0.2):
             deadline = time.monotonic()
 
 
-async def run(sim, loc: list, v, d=15):
+async def run(sim, loc: list, v, d=15, variation=0.12):
     random.seed(time.time())
     while True:
+        # lap-to-lap variation, on top of the within-lap drift above
         vRand = 1000/(1000/v-(2*random.random()-1)*d)
-        await run1(sim, loc, vRand)
+        await run1(sim, loc, vRand, variation=variation)
         print("跑完一圈了")

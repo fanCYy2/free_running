@@ -1,4 +1,6 @@
 v: 3.3
+# 圈内配速的平滑波动幅度，0.12 表示 ±12%；设为 0 则恒速
+speedVariation: 0.12
 routeConfig: "ZJGroute.txt"
 libimobiledeviceDir: "libimobiledevice"
 imageDir: "DeveloperDiskImage"

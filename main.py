@@ -55,7 +55,8 @@ async def main():
                         print(f"已开始模拟跑步，速度大约为 {config.config.v} m/s")
                         print("会无限循环，按 Ctrl+C 退出")
                         print("请勿直接关闭窗口，否则无法还原正常定位")
-                        await run.run(sim, loc, config.config.v)
+                        await run.run(sim, loc, config.config.v,
+                                      variation=getattr(config.config, 'speedVariation', 0.12))
                     except (KeyboardInterrupt, asyncio.CancelledError):
                         logger.debug("get KeyboardInterrupt")
                     finally:
