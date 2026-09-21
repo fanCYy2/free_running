@@ -6,4 +6,4 @@
 # which iOS 18 accepts -- and which needs no root at all.
 pymobiledevice3>=11.15,<12
 PyYAML>=6.0
-geopy>=2.4
+geopy>=2.5.0
