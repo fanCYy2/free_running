@@ -4,6 +4,6 @@
 # its TLS handshake outright (CONNECTION_CLOSE, frame_type=6, reason='TLS
 # error'). 11.x uses Apple's own native tunnel via remotepairingd on macOS,
 # which iOS 18 accepts -- and which needs no root at all.
-pymobiledevice3>=11.15,<12
+pymobiledevice3>=11.16.3,<12
 PyYAML>=6.0
 geopy>=2.4
